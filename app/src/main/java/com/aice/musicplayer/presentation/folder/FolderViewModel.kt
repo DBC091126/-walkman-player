@@ -28,81 +28,56 @@ class FolderViewModel @Inject constructor(
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
     val songs: StateFlow<List<Song>> = _songs.asStateFlow()
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
-    private val _storageRoots = MutableStateFlow<List<String>>(emptyList())
-    val storageRoots: StateFlow<List<String>> = _storageRoots.asStateFlow()
-
     val playerState = playbackController.playerState
 
-    init {
-        _storageRoots.value = folderRepository.getStorageRoots()
-    }
-
     /**
-     * Enter a storage root — do a full recursive scan like Poweramp.
+     * Enter a folder — recursive scan for all music subfolders (Poweramp-style).
      */
     fun enterFolder(path: String) {
         _currentPath.value = path
         viewModelScope.launch {
             _isScanning.value = true
-            _isLoading.value = true
             try {
-                // Full recursive scan for all music folders
                 _folders.value = folderRepository.findAllMusicFolders(path)
-                // Also load immediate songs in the root
                 _songs.value = folderRepository.scanDirectoryFlat(path)
             } catch (e: Exception) {
                 _folders.value = emptyList()
                 _songs.value = emptyList()
             } finally {
-                _isLoading.value = false
                 _isScanning.value = false
             }
         }
     }
 
     /**
-     * Drill into a subfolder — show its songs only.
+     * Drill into subfolder — show songs + immediate subfolders only.
      */
     fun openSubfolder(path: String) {
         _currentPath.value = path
         viewModelScope.launch {
-            _isLoading.value = true
+            _isScanning.value = true
             try {
                 _songs.value = folderRepository.scanDirectoryFlat(path)
-                // Also show subfolders of this folder
                 _folders.value = folderRepository.listFolders(path)
             } catch (e: Exception) {
                 _songs.value = emptyList()
                 _folders.value = emptyList()
             } finally {
-                _isLoading.value = false
+                _isScanning.value = false
             }
         }
-    }
-
-    fun navigateToRoot() {
-        _currentPath.value = null
-        _folders.value = emptyList()
-        _songs.value = emptyList()
     }
 
     fun goUp() {
         val current = _currentPath.value ?: return
         val parent = java.io.File(current).parent ?: return
-        // Check if parent is a storage root
-        val isStorageRoot = _storageRoots.value.any { it == parent }
-        if (isStorageRoot) {
-            // Go back to storage root view — but keep scanning
-            _currentPath.value = parent
-            enterFolder(parent)
-        } else if (_currentPath.value == parent) {
-            navigateToRoot()
+        if (parent == java.io.File(current).path) {
+            _currentPath.value = null
+            _folders.value = emptyList()
+            _songs.value = emptyList()
         } else {
             openSubfolder(parent)
         }
