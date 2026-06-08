@@ -98,4 +98,7 @@ dependencies {
 
     // Coil
     implementation(libs.coil.compose)
+
+    // AndroidX Media (for MediaBrowserService)
+    implementation(libs.androidx.media)
 }
