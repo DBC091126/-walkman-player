@@ -274,11 +274,9 @@ private fun SonySeekBar(currentPosition: Long, duration: Long, onSeek: (Long) ->
         Box(Modifier.fillMaxWidth().height(2.dp).background(White40.copy(alpha = 0.25f)))
         // Progress
         Box(Modifier.fillMaxWidth(frac).height(2.dp).background(White65))
-        // Dot — positioned using layout percentage
+        // Dot
         if (barWidth > 0) {
-            val dotOffsetDp = with(androidx.compose.ui.platform.LocalDensity.current) {
-                ((barWidth * frac - 6f).coerceAtLeast(0f)).toDp()
-            }
+            val dotOffsetDp = androidx.compose.ui.unit.Dp((barWidth * frac - 6f).coerceAtLeast(0f) / androidx.compose.ui.platform.LocalDensity.current.density)
             Box(Modifier.offset(x = dotOffsetDp).size(12.dp).clip(CircleShape).background(Color.White))
         }
     }
