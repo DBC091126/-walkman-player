@@ -1,17 +1,23 @@
 package com.aice.musicplayer.data.scanner
 
+import android.content.Context
+import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.os.Environment
 import com.aice.musicplayer.domain.model.Folder
 import com.aice.musicplayer.domain.model.Song
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class FolderScanner @Inject constructor() {
+class FolderScanner @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     companion object {
         private val AUDIO_EXTENSIONS = setOf(
@@ -189,6 +195,22 @@ class FolderScanner @Inject constructor() {
         }?.let { File(directory, it).absolutePath } ?: ""
     }
 
+    /**
+     * Save embedded album art bitmap to app cache directory.
+     * Returns the cache file path that can be loaded by Coil/AsyncImage.
+     */
+    private fun saveArtToCache(data: ByteArray, songName: String, folderPath: String): String {
+        return try {
+            val cacheDir = File(context.cacheDir, "album_art")
+            if (!cacheDir.exists()) cacheDir.mkdirs()
+            val file = File(cacheDir, "${folderPath.hashCode()}_${songName.hashCode()}.jpg")
+            FileOutputStream(file).use { it.write(data) }
+            file.absolutePath
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
     private fun extractMetadata(file: File, folderPath: String): Song {
         var title = file.nameWithoutExtension
         var artist = "Unknown Artist"
@@ -242,9 +264,11 @@ class FolderScanner @Inject constructor() {
             // Check for embedded album art
             val embeddedPicture = retriever.embeddedPicture
             if (embeddedPicture != null) {
-                albumArtUri = file.absolutePath  // Will be decoded from file
-            } else {
-                // Look for cover files in the same folder
+                // Save embedded art to cache so AsyncImage can load it
+                albumArtUri = saveArtToCache(embeddedPicture, file.nameWithoutExtension, folderPath)
+            }
+            if (albumArtUri.isBlank()) {
+                // Fall back to folder cover files
                 albumArtUri = findCoverArt(File(folderPath))
             }
 

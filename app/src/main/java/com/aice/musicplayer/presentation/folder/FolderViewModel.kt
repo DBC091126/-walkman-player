@@ -43,6 +43,8 @@ class FolderViewModel @Inject constructor(
             try {
                 _folders.value = folderRepository.findAllMusicFolders(path)
                 _songs.value = folderRepository.scanDirectoryFlat(path)
+                // Also save to database so Library shows albums/artists
+                musicRepository.scanAndImport(path)
             } catch (e: Exception) {
                 _folders.value = emptyList()
                 _songs.value = emptyList()

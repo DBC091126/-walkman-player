@@ -49,6 +49,16 @@ class MusicRepository @Inject constructor(
         }
     }
 
+    /**
+     * Scan a directory and upsert songs — keeps existing songs from other directories.
+     */
+    suspend fun scanAndImport(path: String) {
+        val songs = folderScanner.scanDirectory(path)
+        if (songs.isNotEmpty()) {
+            songDao.insertAll(songs.map { it.toEntity() })
+        }
+    }
+
     suspend fun scanFromMediaStore() {
         val songs = mediaScanner.scanMediaStore()
         if (songs.isNotEmpty()) {
