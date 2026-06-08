@@ -19,17 +19,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Download Gradle wrapper JAR
+      - name: Install Gradle
         run: |
-          mkdir -p gradle/wrapper
-          curl -sL -o gradle/wrapper/gradle-wrapper.jar \
-            "https://github.com/gradle/gradle/raw/v8.9.0/gradle/wrapper/gradle-wrapper.jar"
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+          wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q gradle-8.9-bin.zip
+          echo "$(pwd)/gradle-8.9/bin" >> $GITHUB_PATH
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug
+        run: gradle assembleDebug --no-daemon
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
