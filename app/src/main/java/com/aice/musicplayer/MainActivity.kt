@@ -1,9 +1,13 @@
 package com.aice.musicplayer
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -32,7 +36,13 @@ class MainActivity : ComponentActivity() {
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        hasStoragePermission = permissions.values.all { it }
+        hasStoragePermission = checkPermissions()
+    }
+
+    private val manageStorageLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        hasStoragePermission = checkPermissions()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,26 +70,57 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkPermissions(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(
-                this, Manifest.permission.READ_MEDIA_AUDIO
-            ) == PackageManager.PERMISSION_GRANTED
-        } else {
-            ContextCompat.checkSelfPermission(
-                this, Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == PackageManager.PERMISSION_GRANTED
+        // Android 11+: need MANAGE_EXTERNAL_STORAGE for SD card access
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                return false
+            }
         }
+
+        // Android 13+: need READ_MEDIA_AUDIO
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.READ_MEDIA_AUDIO
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                return false
+            }
+        }
+        // Older: need READ_EXTERNAL_STORAGE
+        else {
+            if (ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.READ_EXTERNAL_STORAGE
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                return false
+            }
+        }
+
+        return true
     }
 
     private fun checkAndRequestPermissions() {
         hasStoragePermission = checkPermissions()
-        if (!hasStoragePermission) {
-            val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
-            } else {
-                arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        if (hasStoragePermission) return
+
+        // Step 1: On Android 11+, request MANAGE_EXTERNAL_STORAGE first
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+                manageStorageLauncher.launch(intent)
+                return
             }
-            permissionLauncher.launch(permissions)
         }
+
+        // Step 2: Request media/read permissions
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
+        } else {
+            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        permissionLauncher.launch(permissions)
     }
 }
