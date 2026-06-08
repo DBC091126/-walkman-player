@@ -1,13 +1,15 @@
 package com.aice.musicplayer.data.scanner
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.os.Environment
 import com.aice.musicplayer.domain.model.Folder
 import com.aice.musicplayer.domain.model.Song
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -30,18 +32,24 @@ class FolderScanner @Inject constructor(
             "albumart.jpg", "albumart.png", "AlbumArt.jpg", "AlbumArt.png",
             "front.jpg", "front.png"
         )
+
+        /** Number of parallel metadata extractors */
+        private const val PARALLELISM = 6
     }
 
     /**
-     * Scan a directory recursively and return a list of Songs.
+     * Scan a directory recursively — parallel metadata extraction.
      */
     suspend fun scanDirectory(rootPath: String): List<Song> = withContext(Dispatchers.IO) {
         val rootDir = File(rootPath)
         if (!rootDir.exists() || !rootDir.isDirectory) return@withContext emptyList()
 
-        val songs = mutableListOf<Song>()
-        scanRecursive(rootDir, songs)
-        songs
+        // Step 1: fast file collection (no metadata)
+        val files = mutableListOf<Pair<File, String>>()
+        collectFiles(rootDir, files)
+
+        // Step 2: parallel metadata extraction
+        extractBatch(files)
     }
 
     /**
@@ -70,17 +78,43 @@ class FolderScanner @Inject constructor(
     }
 
     /**
-     * Scan a single directory (non-recursive) for audio files.
+     * Scan a single directory (non-recursive) — parallel metadata.
      */
     suspend fun scanDirectoryFlat(dirPath: String): List<Song> = withContext(Dispatchers.IO) {
         val dir = File(dirPath)
         if (!dir.exists() || !dir.isDirectory) return@withContext emptyList()
 
-        dir.listFiles()
+        val files = dir.listFiles()
             ?.filter { it.isFile && it.extension.lowercase() in AUDIO_EXTENSIONS }
-            ?.map { file -> extractMetadata(file, dirPath) }
-            ?.sortedBy { it.trackNumber }
+            ?.map { Pair(it, dirPath) }
             ?: emptyList()
+
+        extractBatch(files).sortedBy { it.trackNumber }
+    }
+
+    /**
+     * Parallel metadata extraction with bounded concurrency.
+     */
+    private suspend fun extractBatch(files: List<Pair<File, String>>): List<Song> =
+        coroutineScope {
+            files.chunked(PARALLELISM * 4).flatMap { chunk ->
+                chunk.map { (file, folder) ->
+                    async { extractMetadata(file, folder) }
+                }.awaitAll()
+            }
+        }
+
+    /**
+     * Fast recursive file collector — no metadata extraction.
+     */
+    private fun collectFiles(dir: File, result: MutableList<Pair<File, String>>) {
+        dir.listFiles()?.forEach { file ->
+            if (file.isDirectory && !file.name.startsWith(".")) {
+                collectFiles(file, result)
+            } else if (file.isFile && file.extension.lowercase() in AUDIO_EXTENSIONS) {
+                result.add(Pair(file, dir.absolutePath))
+            }
+        }
     }
 
     /**
@@ -166,17 +200,6 @@ class FolderScanner @Inject constructor(
         }
 
         result
-    }
-
-    private fun scanRecursive(directory: File, songList: MutableList<Song>) {
-        directory.listFiles()?.forEach { file ->
-            if (file.isDirectory && !file.name.startsWith(".")) {
-                scanRecursive(file, songList)
-            } else if (file.isFile && file.extension.lowercase() in AUDIO_EXTENSIONS) {
-                val song = extractMetadata(file, directory.absolutePath)
-                songList.add(song)
-            }
-        }
     }
 
     private fun countSongs(directory: File): Int {
