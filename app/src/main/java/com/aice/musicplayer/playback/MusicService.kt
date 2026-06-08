@@ -14,14 +14,14 @@ import androidx.media.session.MediaButtonReceiver
 import com.aice.musicplayer.MainActivity
 import com.aice.musicplayer.R
 import com.aice.musicplayer.domain.player.PlaybackController
-import com.aice.musicplayer.domain.player.RepeatMode
-import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 
-@AndroidEntryPoint
 class MusicService : MediaBrowserServiceCompat() {
 
-    @Inject lateinit var playbackController: PlaybackController
+    private lateinit var playbackController: PlaybackController
 
     private lateinit var mediaSession: MediaSessionCompat
 
@@ -30,8 +30,21 @@ class MusicService : MediaBrowserServiceCompat() {
         const val NOTIFICATION_ID = 1
     }
 
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface PlaybackControllerEntryPoint {
+        fun playbackController(): PlaybackController
+    }
+
     override fun onCreate() {
         super.onCreate()
+
+        // Manual Hilt injection
+        val entryPoint = EntryPointAccessors.fromApplication(
+            applicationContext,
+            PlaybackControllerEntryPoint::class.java
+        )
+        playbackController = entryPoint.playbackController()
 
         mediaSession = MediaSessionCompat(this, "WalkmanPlayer").apply {
             setCallback(SessionCallback())
