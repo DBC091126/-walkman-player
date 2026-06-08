@@ -101,7 +101,7 @@ fun NowPlayingScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
     ) {
         if (song == null) {
             Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Icon(Icons.Default.MusicNote, null, tint = White40, Modifier.size(64.dp))
+                Icon(Icons.Default.MusicNote, contentDescription = null, tint = White40, modifier = Modifier.size(64.dp))
                 Spacer(Modifier.height(16.dp))
                 Text("未在播放", color = WhiteMuted, style = MaterialTheme.typography.titleMedium)
             }
@@ -116,14 +116,14 @@ fun NowPlayingScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack, modifier = Modifier.size(40.dp), interactionSource = remember { MutableInteractionSource() }) {
-                    Icon(Icons.Default.KeyboardArrowDown, "返回", tint = White85, Modifier.size(28.dp))
+                    Icon(Icons.Default.KeyboardArrowDown, "返回", tint = White85, modifier = Modifier.size(28.dp))
                 }
                 Row {
                     IconButton(onClick = {}, modifier = Modifier.size(40.dp), interactionSource = remember { MutableInteractionSource() }) {
-                        Icon(Icons.Default.Lyrics, "歌词", tint = White85, Modifier.size(24.dp))
+                        Icon(Icons.Default.Lyrics, "歌词", tint = White85, modifier = Modifier.size(24.dp))
                     }
                     IconButton(onClick = {}, modifier = Modifier.size(40.dp), interactionSource = remember { MutableInteractionSource() }) {
-                        Icon(Icons.Default.MoreVert, "菜单", tint = White85, Modifier.size(24.dp))
+                        Icon(Icons.Default.MoreVert, "菜单", tint = White85, modifier = Modifier.size(24.dp))
                     }
                 }
             }
@@ -166,7 +166,7 @@ fun NowPlayingScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
                 IconButton(onClick = {}, modifier = Modifier.size(32.dp), interactionSource = remember { MutableInteractionSource() }) {
-                    Icon(Icons.Default.StarBorder, "收藏", tint = White85, Modifier.size(24.dp))
+                    Icon(Icons.Default.StarBorder, "收藏", tint = White85, modifier = Modifier.size(24.dp))
                 }
             }
 
@@ -240,7 +240,7 @@ private fun CenterPlayBtn(isPlaying: Boolean, onClick: () -> Unit) {
             modifier = Modifier.size(68.dp),
             interactionSource = remember { MutableInteractionSource() }
         ) {
-            Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = WhiteText, Modifier.size(40.dp))
+            Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = WhiteText, modifier = Modifier.size(40.dp))
         }
         LaunchedEffect(pressed) { if (pressed) { delay(150); pressed = false } }
     }
