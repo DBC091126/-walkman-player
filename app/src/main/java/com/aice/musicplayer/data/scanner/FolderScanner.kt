@@ -86,13 +86,23 @@ class FolderScanner @Inject constructor() {
         // Internal storage
         roots.add(Environment.getExternalStorageDirectory().absolutePath)
 
-        // External SD card (if available)
-        val externalFilesDir = File("/storage")
-        externalFilesDir.listFiles()?.forEach { storage ->
-            if (storage.isDirectory && storage.canRead() &&
-                storage.name != "emulated" && storage.name != "self"
-            ) {
-                roots.add(storage.absolutePath)
+        // Also add primary external as fallback
+        val primary = "/storage/emulated/0"
+        if (primary !in roots) roots.add(primary)
+
+        // External SD card — check multiple mount points
+        val searchPaths = listOf("/storage", "/mnt/media_rw", "/mnt")
+        for (searchPath in searchPaths) {
+            File(searchPath).listFiles()?.forEach { dir ->
+                if (dir.isDirectory
+                    && dir.name != "emulated"
+                    && dir.name != "self"
+                    && dir.name != "sdcard"
+                    && !dir.name.startsWith(".")
+                    && dir.absolutePath !in roots
+                ) {
+                    roots.add(dir.absolutePath)
+                }
             }
         }
 
