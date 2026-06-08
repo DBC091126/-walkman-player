@@ -99,6 +99,9 @@ dependencies {
     // Coil
     implementation(libs.coil.compose)
 
+    // Palette (album art color extraction)
+    implementation(libs.androidx.palette)
+
     // AndroidX Media (for MediaBrowserService)
     implementation(libs.androidx.media)
 }

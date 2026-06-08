@@ -61,6 +61,9 @@ coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref 
 # AndroidX Media (for MediaBrowserServiceCompat)
 androidx-media = { group = "androidx.media", name = "media", version = "1.7.0" }
 
+# Palette (album art color extraction)
+androidx-palette = { group = "androidx.palette", name = "palette-ktx", version = "1.0.0" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

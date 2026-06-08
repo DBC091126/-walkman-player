@@ -56,6 +56,8 @@ class PlaybackController @Inject constructor(
         playlist = songs
         currentIndex = startIndex.coerceIn(0, songs.lastIndex.coerceAtLeast(0))
 
+        _playerState.update { it.copy(currentIndex = currentIndex, totalCount = songs.size) }
+
         val mediaItems = songs.map { song -> song.toMediaItem() }
         exoPlayer.setMediaItems(mediaItems, currentIndex, 0L)
         exoPlayer.prepare()
@@ -120,7 +122,9 @@ class PlaybackController @Inject constructor(
             _playerState.update {
                 it.copy(
                     currentSong = playlist[idx],
-                    duration = exoPlayer.duration
+                    duration = exoPlayer.duration,
+                    currentIndex = idx,
+                    totalCount = playlist.size
                 )
             }
         }

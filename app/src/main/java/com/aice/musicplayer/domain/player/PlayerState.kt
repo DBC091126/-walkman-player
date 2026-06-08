@@ -9,7 +9,9 @@ data class PlayerState(
     val bufferedPosition: Long = 0L,
     val duration: Long = 0L,
     val shuffleMode: Boolean = false,
-    val repeatMode: RepeatMode = RepeatMode.OFF
+    val repeatMode: RepeatMode = RepeatMode.OFF,
+    val currentIndex: Int = 0,
+    val totalCount: Int = 0
 )
 
 enum class RepeatMode {
