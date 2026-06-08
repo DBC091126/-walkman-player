@@ -6,7 +6,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -17,34 +16,36 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.aice.musicplayer.domain.model.Folder
+import com.aice.musicplayer.presentation.theme.GoldPrimary
 import com.aice.musicplayer.presentation.theme.WhiteMuted
 
 @Composable
 fun FolderListItem(
     folder: Folder,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    indent: Int = 0
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(start = (16 + indent * 20).dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Folder icon or cover art
         if (folder.coverArtPath.isNotBlank()) {
             AsyncImage(
                 model = folder.coverArtPath,
-                contentDescription = "Folder cover",
+                contentDescription = "封面",
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(44.dp)
                     .clip(RoundedCornerShape(6.dp)),
                 contentScale = ContentScale.Crop
             )
         } else {
             Surface(
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(44.dp),
                 shape = RoundedCornerShape(6.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant
             ) {
@@ -52,8 +53,8 @@ fun FolderListItem(
                     Icon(
                         imageVector = Icons.Default.Folder,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                        tint = GoldPrimary,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -61,7 +62,7 @@ fun FolderListItem(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Folder name + song count
+        // Folder name + song count + path hint
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = folder.name,
@@ -70,18 +71,27 @@ fun FolderListItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = "${folder.songCount} 首歌曲",
-                style = MaterialTheme.typography.bodySmall,
-                color = WhiteMuted
-            )
+            Row {
+                Text(
+                    text = "${folder.songCount} 首",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = WhiteMuted
+                )
+                if (folder.hasSubfolders) {
+                    Text(
+                        text = " · 含子文件夹",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = WhiteMuted
+                    )
+                }
+            }
         }
 
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = "进入",
             tint = WhiteMuted,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(22.dp)
         )
     }
 }

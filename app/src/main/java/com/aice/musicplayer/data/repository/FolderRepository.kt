@@ -3,6 +3,7 @@ package com.aice.musicplayer.data.repository
 import com.aice.musicplayer.data.local.dao.FolderDao
 import com.aice.musicplayer.data.scanner.FolderScanner
 import com.aice.musicplayer.domain.model.Folder
+import com.aice.musicplayer.domain.model.Song
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -20,6 +21,13 @@ class FolderRepository @Inject constructor(
         return folderScanner.listFolders(parentPath)
     }
 
-    suspend fun scanDirectoryFlat(dirPath: String) =
+    suspend fun scanDirectoryFlat(dirPath: String): List<Song> =
         folderScanner.scanDirectoryFlat(dirPath)
+
+    /**
+     * Poweramp-style: find ALL music folders under a storage root.
+     */
+    suspend fun findAllMusicFolders(rootPath: String): List<Folder> {
+        return folderScanner.findAllMusicFolders(rootPath)
+    }
 }

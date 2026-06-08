@@ -5,5 +5,6 @@ data class Folder(
     val name: String,
     val songCount: Int = 0,
     val coverArtPath: String = "",
-    val hasSubfolders: Boolean = false
+    val hasSubfolders: Boolean = false,
+    val depth: Int = 0
 )

@@ -85,8 +85,6 @@ class FolderScanner @Inject constructor() {
 
         // Internal storage
         roots.add(Environment.getExternalStorageDirectory().absolutePath)
-
-        // Also add primary external as fallback
         val primary = "/storage/emulated/0"
         if (primary !in roots) roots.add(primary)
 
@@ -97,7 +95,6 @@ class FolderScanner @Inject constructor() {
                 if (dir.isDirectory
                     && dir.name != "emulated"
                     && dir.name != "self"
-                    && dir.name != "sdcard"
                     && !dir.name.startsWith(".")
                     && dir.absolutePath !in roots
                 ) {
@@ -107,6 +104,62 @@ class FolderScanner @Inject constructor() {
         }
 
         return roots
+    }
+
+    /**
+     * Like Poweramp: recursively find ALL folders that contain music files under rootPath.
+     * Returns folders grouped by depth for hierarchy display.
+     */
+    suspend fun findAllMusicFolders(rootPath: String): List<Folder> = withContext(Dispatchers.IO) {
+        val rootDir = File(rootPath)
+        if (!rootDir.exists() || !rootDir.isDirectory) return@withContext emptyList()
+
+        val result = mutableListOf<Folder>()
+
+        // Use a queue for breadth-first traversal
+        val queue = ArrayDeque<File>()
+        rootDir.listFiles()
+            ?.filter { it.isDirectory && !it.name.startsWith(".") }
+            ?.sortedBy { it.name }
+            ?.forEach { queue.add(it) }
+
+        while (queue.isNotEmpty()) {
+            val dir = queue.removeFirst()
+            val audioFiles = mutableListOf<File>()
+            val subDirs = mutableListOf<File>()
+
+            dir.listFiles()?.forEach { file ->
+                if (file.isDirectory && !file.name.startsWith(".")) {
+                    subDirs.add(file)
+                } else if (file.isFile && file.extension.lowercase() in AUDIO_EXTENSIONS) {
+                    audioFiles.add(file)
+                }
+            }
+
+            // Add subdirs to queue
+            subDirs.sortedBy { it.name }.forEach { queue.add(it) }
+
+            // Only include folders that actually have audio files
+            if (audioFiles.isNotEmpty()) {
+                val coverPath = findCoverArt(dir)
+                val depth = dir.absolutePath
+                    .removePrefix(rootPath)
+                    .count { it == '/' }
+
+                result.add(
+                    Folder(
+                        path = dir.absolutePath,
+                        name = dir.name,
+                        songCount = audioFiles.size,
+                        coverArtPath = coverPath,
+                        hasSubfolders = subDirs.isNotEmpty(),
+                        depth = depth
+                    )
+                )
+            }
+        }
+
+        result
     }
 
     private fun scanRecursive(directory: File, songList: MutableList<Song>) {

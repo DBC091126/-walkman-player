@@ -33,25 +33,17 @@ import com.aice.musicplayer.presentation.player.PlayerViewModel
 import com.aice.musicplayer.presentation.theme.*
 import java.io.File
 
-private fun storageLabel(path: String): String {
-    return when {
-        path.contains("/emulated") || path.endsWith("/0") -> "内部存储"
-        path.contains("/sdcard") || path.contains("SD") -> "SD 卡"
-        path.contains("/usb") || path.contains("USB") -> "USB 存储"
-        else -> File(path).name.ifBlank { "外部存储" }
-    }
+private fun storageLabel(path: String): String = when {
+    path.contains("/emulated") || path.endsWith("/0") -> "内部存储"
+    path.contains("/usb") || path.contains("USB") -> "USB 存储"
+    else -> "SD 卡"
 }
 
-private fun storageSubLabel(path: String): String {
-    val file = File(path)
-    val free = file.freeSpace
-    val total = file.totalSpace
-    return if (total > 0) {
-        val freeGb = free / (1024.0 * 1024 * 1024)
-        "剩余 %.1f GB".format(freeGb)
-    } else {
-        path
-    }
+private fun storageSub(path: String): String {
+    val f = File(path)
+    val total = f.totalSpace
+    val free = f.freeSpace
+    return if (total > 0) "剩余 %.1f GB / 共 %.1f GB".format(free / 1e9, total / 1e9) else path
 }
 
 private fun storageIcon(path: String) = when {
@@ -60,27 +52,14 @@ private fun storageIcon(path: String) = when {
     else -> Icons.Default.SdCard
 }
 
-/**
- * Try to convert a SAF content URI to a real file path.
- */
 private fun uriToPath(uri: Uri): String? {
-    val docId = try {
-        DocumentsContract.getTreeDocumentId(uri)
-    } catch (e: Exception) {
-        return null
-    }
-
-    // Format: "primary:Music" or "XXXX-XXXX:Music"
+    val docId = try { DocumentsContract.getTreeDocumentId(uri) } catch (_: Exception) { return null }
     val parts = docId.split(":", limit = 2)
     if (parts.size < 2) return null
-
-    val volume = parts[0]
-    val subPath = parts[1]
-
+    val (volume, sub) = parts[0] to parts[1]
     return when (volume) {
-        "primary" -> "/storage/emulated/0/$subPath"
-        "home" -> "/storage/emulated/0/$subPath"
-        else -> "/storage/$volume/$subPath"
+        "primary", "home" -> "/storage/emulated/0/$sub"
+        else -> "/storage/$volume/$sub"
     }
 }
 
@@ -91,75 +70,50 @@ fun FolderBrowserScreen(
     playerViewModel: PlayerViewModel,
     onNowPlaying: () -> Unit
 ) {
-    val context = LocalContext.current
+    val ctx = LocalContext.current
     val currentPath by folderViewModel.currentPath.collectAsState()
     val folders by folderViewModel.folders.collectAsState()
     val songs by folderViewModel.songs.collectAsState()
     val isLoading by folderViewModel.isLoading.collectAsState()
+    val isScanning by folderViewModel.isScanning.collectAsState()
     val storageRoots by folderViewModel.storageRoots.collectAsState()
     val playerState by playerViewModel.playerState.collectAsState()
     val currentSong = playerState.currentSong
 
-    // SAF folder picker
     val safLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
+        ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
         if (uri != null) {
-            // Take persistent permission
-            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            try {
-                context.contentResolver.takePersistableUriPermission(uri, flags)
-            } catch (_: Exception) { }
-
-            // Try to convert to file path
-            val path = uriToPath(uri)
-            if (path != null) {
-                folderViewModel.enterFolder(path)
-            } else {
-                // Fallback: just use the URI path part
-                val fallback = uri.lastPathSegment ?: uri.toString()
-                folderViewModel.enterFolder(fallback)
-            }
+            try { ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+            val path = uriToPath(uri) ?: uri.lastPathSegment ?: uri.toString()
+            folderViewModel.enterFolder(path)
         }
     }
 
+    val isRoot = currentPath == null
+
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
     ) {
         // Top bar
         TopAppBar(
             title = {
-                if (currentPath != null) {
+                if (!isRoot) {
                     val parts = currentPath!!.split("/").filter { it.isNotBlank() }
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        parts.forEachIndexed { index, part ->
-                            if (index > 0) {
-                                Text(" / ", color = WhiteMuted, style = MaterialTheme.typography.titleSmall)
-                            }
-                            Text(
-                                part,
-                                color = if (index == parts.lastIndex) GoldPrimary else WhiteSecondary,
+                    Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                        parts.forEachIndexed { i, p ->
+                            if (i > 0) Text(" / ", color = WhiteMuted, style = MaterialTheme.typography.titleSmall)
+                            Text(p, color = if (i == parts.lastIndex) GoldPrimary else WhiteSecondary,
                                 style = MaterialTheme.typography.titleSmall,
-                                fontWeight = if (index == parts.lastIndex) FontWeight.Bold else FontWeight.Normal,
-                                maxLines = 1
-                            )
+                                fontWeight = if (i == parts.lastIndex) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1)
                         }
                     }
-                } else {
-                    Text("文件夹", fontWeight = FontWeight.Bold)
-                }
+                } else Text("文件夹", fontWeight = FontWeight.Bold)
             },
             navigationIcon = {
-                if (currentPath != null) {
-                    IconButton(onClick = { folderViewModel.goUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回上级")
-                    }
+                if (!isRoot) IconButton(onClick = { folderViewModel.goUp() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -168,25 +122,15 @@ fun FolderBrowserScreen(
             )
         )
 
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize()) {
             when {
-                isLoading -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = GoldPrimary)
-                    }
-                }
-
-                currentPath == null -> StorageRootView(
-                    storageRoots = storageRoots,
-                    onRootSelected = { folderViewModel.enterFolder(it) },
-                    onSystemPicker = { safLauncher.launch(null) }
-                )
-
-                else -> FolderContentView(
+                isRoot -> StorageRootView(storageRoots, { folderViewModel.enterFolder(it) }, { safLauncher.launch(null) })
+                isScanning -> ScanningView(currentPath!!)
+                else -> MusicFolderView(
                     folders = folders,
                     songs = songs,
                     currentSong = currentSong,
-                    onFolderClick = { folderViewModel.enterFolder(it.path) },
+                    onFolderClick = { folderViewModel.openSubfolder(it.path) },
                     onSongClick = { folderViewModel.playSong(it, songs) },
                     onPlayAll = { folderViewModel.playAllSongsInFolder() }
                 )
@@ -196,104 +140,72 @@ fun FolderBrowserScreen(
 }
 
 @Composable
+private fun ScanningView(path: String) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = GoldPrimary, modifier = Modifier.size(48.dp))
+            Spacer(Modifier.height(20.dp))
+            Text("正在扫描音乐文件夹...", color = WhiteSecondary, style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(6.dp))
+            Text(path, color = WhiteMuted, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
 private fun StorageRootView(
-    storageRoots: List<String>,
-    onRootSelected: (String) -> Unit,
+    roots: List<String>,
+    onSelect: (String) -> Unit,
     onSystemPicker: () -> Unit
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.Top
-    ) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
         item {
-            Text(
-                "选择存储位置",
-                style = MaterialTheme.typography.headlineMedium,
-                color = WhiteText,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-            Text(
-                "浏览本地文件夹中的音乐文件",
-                style = MaterialTheme.typography.bodyMedium,
-                color = WhiteMuted,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
+            Text("选择存储位置", style = MaterialTheme.typography.headlineMedium, color = WhiteText, fontWeight = FontWeight.Bold)
+            Text("浏览本地文件夹中的音乐", style = MaterialTheme.typography.bodyMedium, color = WhiteMuted, modifier = Modifier.padding(bottom = 24.dp, top = 4.dp))
         }
-
-        // Detected storage roots
-        items(storageRoots) { root ->
+        items(roots) { root ->
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 6.dp)
-                    .clickable { onRootSelected(root) },
+                Modifier.fillMaxWidth().padding(vertical = 6.dp).clickable { onSelect(root) },
                 colors = CardDefaults.cardColors(containerColor = BlackCard),
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        modifier = Modifier.size(52.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        color = GoldPrimary.copy(alpha = 0.12f)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                storageIcon(root), null,
-                                tint = GoldPrimary, modifier = Modifier.size(28.dp)
-                            )
-                        }
+                Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Surface(Modifier.size(52.dp), RoundedCornerShape(14.dp), color = GoldPrimary.copy(alpha = 0.12f)) {
+                        Box(contentAlignment = Alignment.Center) { Icon(storageIcon(root), null, tint = GoldPrimary, modifier = Modifier.size(28.dp)) }
                     }
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         Text(storageLabel(root), style = MaterialTheme.typography.titleMedium, color = WhiteText, fontWeight = FontWeight.SemiBold)
-                        Text(storageSubLabel(root), style = MaterialTheme.typography.bodySmall, color = WhiteMuted)
+                        Text(storageSub(root), style = MaterialTheme.typography.bodySmall, color = WhiteMuted)
                     }
                     Icon(Icons.Default.ChevronRight, null, tint = WhiteMuted, modifier = Modifier.size(24.dp))
                 }
             }
         }
-
-        // Divider + system picker
         item {
             Spacer(Modifier.height(24.dp))
             HorizontalDivider(color = WhiteMuted.copy(alpha = 0.15f))
-            Spacer(Modifier.height(24.dp))
-            Text(
-                "如果看不到 SD 卡",
-                style = MaterialTheme.typography.titleSmall,
-                color = WhiteMuted
-            )
+            Spacer(Modifier.height(20.dp))
+            Text("找不到 SD 卡？", style = MaterialTheme.typography.titleSmall, color = WhiteMuted)
             Spacer(Modifier.height(8.dp))
             OutlinedButton(
                 onClick = onSystemPicker,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldPrimary),
-                border = androidx.compose.foundation.BorderStroke(1.dp, GoldPrimary.copy(alpha = 0.4f))
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldPrimary)
             ) {
-                Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.FolderOpen, null, Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("使用系统文件选择器", modifier = Modifier.padding(vertical = 6.dp))
+                Text("使用系统文件选择器", Modifier.padding(vertical = 6.dp))
             }
-            Text(
-                "通过系统界面选择 SD 卡上的音乐文件夹",
-                style = MaterialTheme.typography.bodySmall,
-                color = WhiteMuted,
-                modifier = Modifier.padding(top = 6.dp)
-            )
+            Text("通过系统界面选择 SD 卡上的音乐文件夹", style = MaterialTheme.typography.bodySmall, color = WhiteMuted, modifier = Modifier.padding(top = 6.dp))
         }
-
         item { Spacer(Modifier.height(80.dp)) }
     }
 }
 
 @Composable
-private fun FolderContentView(
+private fun MusicFolderView(
     folders: List<Folder>,
     songs: List<Song>,
     currentSong: Song?,
@@ -301,54 +213,39 @@ private fun FolderContentView(
     onSongClick: (Song) -> Unit,
     onPlayAll: () -> Unit
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 80.dp)
-    ) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
         if (folders.isNotEmpty()) {
             item {
-                Text(
-                    "文件夹",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = GoldPrimary,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+                Text("文件夹 (${folders.size})", style = MaterialTheme.typography.titleSmall,
+                    color = GoldPrimary, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             }
-            items(folders) { folder ->
-                FolderListItem(folder = folder, onClick = { onFolderClick(folder) })
-                HorizontalDivider(color = WhiteMuted.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 16.dp))
+            items(folders, key = { it.path }) { folder ->
+                FolderListItem(
+                    folder = folder,
+                    onClick = { onFolderClick(folder) },
+                    indent = folder.depth.coerceAtMost(5)
+                )
+                HorizontalDivider(color = WhiteMuted.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 16.dp))
             }
         }
 
         if (songs.isNotEmpty()) {
             item {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("歌曲 (${songs.size})", style = MaterialTheme.typography.titleSmall, color = GoldPrimary, fontWeight = FontWeight.Bold)
-                    FilledTonalButton(
-                        onClick = onPlayAll,
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = GoldPrimary.copy(alpha = 0.15f),
-                            contentColor = GoldPrimary
-                        )
-                    ) {
-                        Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp))
+                    FilledTonalButton(onClick = onPlayAll,
+                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = GoldPrimary.copy(alpha = 0.15f), contentColor = GoldPrimary)) {
+                        Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("播放全部")
                     }
                 }
             }
-            items(songs) { song ->
-                SongListItem(
-                    song = song,
-                    isActive = currentSong?.filePath == song.filePath,
-                    onClick = { onSongClick(song) }
-                )
-                HorizontalDivider(color = WhiteMuted.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 16.dp))
+            items(songs, key = { it.filePath }) { song ->
+                SongListItem(song = song, isActive = currentSong?.filePath == song.filePath, onClick = { onSongClick(song) })
+                HorizontalDivider(color = WhiteMuted.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 16.dp))
             }
         }
 
